@@ -1,0 +1,66 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
+
+use eframe::{egui, epi};
+use std::process::Command;
+
+struct MyApp {
+    stdout: String,
+}
+
+impl Default for MyApp {
+    fn default() -> Self {
+        Self {
+	    stdout: "".to_string(),
+        }
+    }
+}
+
+impl epi::App for MyApp {
+    fn name(&self) -> &str {
+        concat!("my command test ", env!("CARGO_PKG_VERSION"))
+    }
+
+    fn update(&mut self, ctx: &egui::Context, frame: &epi::Frame) {
+        egui::CentralPanel::default().show(ctx, |ui| {
+	    ui.button("Run").clicked() {
+		
+		self.stdout.push_str(ret);
+	    }
+
+	    egui::ScrollArea::vertical().show(ui, |ui| {
+		ui.add_sized(ui.available_size(), equi::)
+	    });
+        });
+
+	
+
+    }
+}
+
+fn run_xxd() -> String
+{
+    let result = Command::new()
+	.arg(["dd",
+	      "if=/dev/random",
+	      "bs=16",
+	      "count=16",
+	      "status=none",
+	      "|","xxd"])
+	.output();
+    match result {
+	Ok(v) => {
+	    v
+	},
+	Err(e) => {
+	    let err_str = e.to_string();
+	    
+	},
+    }
+    
+}
+
+fn main() {
+    let options = eframe::NativeOptions::default();
+    eframe::run_native(Box::new(MyApp::default()), options);
+}
+
