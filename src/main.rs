@@ -53,42 +53,42 @@ impl epi::App for MyApp {
 		ui.scroll_to_cursor(Some(Align::BOTTOM));
 	    });
 
-	    // check the program and output the stdout
+	    // check the process
+	    if self.process.is_none() {
+		return;
+	    }
+
+	    // check stdout
+	    let stdout = self.process.as_ref().unwrap().stdout.as_ref();
+	    if stdout.is_none() {
+		self.stdout.push_str("stdout is None\n");
+		return;
+	    }
+
+	    // get the raw fd
+	    let stdout = stdout.unwrap();
+	    let mut f;
+	    unsafe {
+		f = File::from_raw_fd(stdout.as_raw_fd());
+	    }
+
 	    let mut stdio_bytes: Vec<u8> = Vec::<u8>::new();
-	    match &self.process {
-		Some(v) => {
-		    match &v.stdout {
-			Some(v) => {
-			    let mut f;
-			    unsafe {
-				f = File::from_raw_fd(v.as_raw_fd());
-			    }
-			    match f.read(&mut stdio_bytes) {
-				Ok(_) => {
-				    match String::from_utf8(stdio_bytes) {
-					Ok(v) => {
-					    self.stdout.push_str(v.as_str());
-					},
-					Err(_) => {
-					    self.stdout.push_str("<binary data>\n");
-					}
-				    }
-				},
-				_ => {
-				    self.stdout.push_str("Can't read size\n");
-				}
-			    }
-			    
-			},
-			_ => {
-			    self.stdout.push_str("Can't read stdout\n");
-			}
-		    }
-		},
-		_ => {
-		    // donothing
-		}
-	    };
+	    let size = f.read(&mut stdio_bytes);
+	    if size.is_err() {
+		self.stdout.push_str("can't read from stdio\n");
+		self.process = None;
+		return;
+	    }
+
+	    let size = size.unwrap();
+	    let stdout = String::from_utf8(stdio_bytes);
+	    if let Ok(v) = stdout {
+		self.stdout.push_str(v.as_str());
+	    } else {
+		self.stdout.push_str(
+		    format!("<binary data {} bytes>\n", size).as_str()
+		);
+	    }
         });
 
     }
