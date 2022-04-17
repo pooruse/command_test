@@ -1,17 +1,14 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
 use eframe::{egui, epi, egui::Align};
-use std::process::{Command, Child, Stdio};
-use std::fs::File;
-use std::io::Read;
+use std::process::{Command, Child, Stdio, ChildStdout};
+use std::io::{BufRead, BufReader};
 
-
-#[cfg(unix)]
-use std::os::unix::io::{FromRawFd, AsRawFd};
 
 struct MyApp {
     stdout: String,
     process: Option<Child>,
+    process_stdout: Option<BufReader<ChildStdout>>,
     auto: bool,
 }
 
@@ -20,6 +17,7 @@ impl Default for MyApp {
         Self {
 	    stdout: "".to_string(),
 	    process: None,
+	    process_stdout: None,
 	    auto: false,
         }
     }
@@ -40,7 +38,27 @@ impl epi::App for MyApp {
 		    .clicked()
 		{
 		    if self.process.is_none() {
+			// spawn a process
 			self.process = run_program();
+
+			// check the process
+			if self.process.is_none() {
+			    return;
+			}
+
+			// check stdout
+			let stdout = self.process.take().unwrap().stdout;
+			if stdout.is_none() {
+			    self.stdout.push_str("stdout is None\n");
+			    return;
+			}
+
+			
+			self.process_stdout =
+			    Some(BufReader::
+				 new(stdout.unwrap())
+			    );
+
 		    }
 		}
 		ui.checkbox(&mut self.auto, "auto");
@@ -53,42 +71,25 @@ impl epi::App for MyApp {
 		ui.scroll_to_cursor(Some(Align::BOTTOM));
 	    });
 
-	    // check the process
-	    if self.process.is_none() {
+
+	    if self.process_stdout.is_none() {
 		return;
 	    }
 
-	    // check stdout
-	    let stdout = self.process.as_ref().unwrap().stdout.as_ref();
-	    if stdout.is_none() {
-		self.stdout.push_str("stdout is None\n");
-		return;
+
+	    let mut reader = self.process_stdout.take().unwrap();
+	    let mut line = String::new();
+	    let ret = reader.read_line(&mut line);
+	    match ret {
+		Ok(_v) => {
+		    self.stdout.push_str(line.as_str());
+		},
+		Err(_e) => {
+		    self.stdout.push_str("<binary data catched>\n");
+		}
 	    }
 
-	    // get the raw fd
-	    let stdout = stdout.unwrap();
-	    let mut f;
-	    unsafe {
-		f = File::from_raw_fd(stdout.as_raw_fd());
-	    }
-
-	    let mut stdio_bytes: Vec<u8> = Vec::<u8>::new();
-	    let size = f.read(&mut stdio_bytes);
-	    if size.is_err() {
-		self.stdout.push_str("can't read from stdio\n");
-		self.process = None;
-		return;
-	    }
-
-	    let size = size.unwrap();
-	    let stdout = String::from_utf8(stdio_bytes);
-	    if let Ok(v) = stdout {
-		self.stdout.push_str(v.as_str());
-	    } else {
-		self.stdout.push_str(
-		    format!("<binary data {} bytes>\n", size).as_str()
-		);
-	    }
+	    self.process_stdout = Some(reader);
         });
 
     }
@@ -96,9 +97,8 @@ impl epi::App for MyApp {
 
 fn run_program() -> Option<Child>
 {
-    let result = Command::new("ls")
-	.args(["-l",
-	       "/"])
+    let result = Command::new("bash")
+	.args(["test.sh"])
 	.stdout(Stdio::piped())
 	.spawn();
     match result {
@@ -116,3 +116,22 @@ fn main() {
     eframe::run_native(Box::new(MyApp::default()), options);
 }
 
+#[test]
+fn test_process()
+{
+    let mut child = Command::new("ls")
+	.args(["-l", "/"])
+	.stdout(Stdio::piped())
+	.spawn().unwrap();
+    
+    let stdout = child.stdout.take().unwrap();
+    let mut reader = BufReader::new(stdout);
+
+    let mut stdout_bytes = Vec::<u8>::new();
+    reader.lines()
+	.for_each(|l| {
+	    let line = l.unwrap_or("123".to_string());
+	    println!("{}", line);
+	});
+    assert!(false);
+}
